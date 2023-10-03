@@ -15,7 +15,7 @@ import numpy as np
 from torch.utils.data import DataLoader
 from model import PRNet
 
-
+torch.cuda.empty_cache()
 def _init_(args):
     if not os.path.exists('checkpoints'):
         os.makedirs('checkpoints')
@@ -23,9 +23,80 @@ def _init_(args):
         os.makedirs('checkpoints/' + args.exp_name)
     if not os.path.exists('checkpoints/' + args.exp_name + '/' + 'models'):
         os.makedirs('checkpoints/' + args.exp_name + '/' + 'models')
-    os.system('cp main.py checkpoints' + '/' + args.exp_name + '/' + 'main.py.backup')
-    os.system('cp model.py checkpoints' + '/' + args.exp_name + '/' + 'model.py.backup')
-    os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
+    #os.system('cp main.py checkpoints' + '/' + args.exp_name + '/' + 'main.py.backup')
+    #os.system('cp model.py checkpoints' + '/' + args.exp_name + '/' + 'model.py.backup')
+    #os.system('cp data.py checkpoints' + '/' + args.exp_name + '/' + 'data.py.backup')
+
+import torch
+import copy
+from torch.utils.data import DataLoader
+from torch.utils.data import Dataset
+import argparse
+import numpy as np
+import open3d as o3d
+import os
+
+class VTCTestRegistrationData(Dataset):
+    def __init__(self, dataset_root, n_points, meter_scaled=True):
+        self.dataset_root = dataset_root
+        self.n_points = n_points
+        self.meter_scaled = meter_scaled
+       
+        self.template_path = os.path.join(self.dataset_root, 'MaskedPointCloud')
+        self.transformations_path = os.path.join(self.dataset_root, 'Transformations')
+       
+        self.template_file_names = os.listdir(self.template_path)
+        self.template_file_names = [file[:-4] for file in self.template_file_names]
+       
+        if self.meter_scaled:
+            source_path = os.path.join(self.dataset_root, 'source', 'vtc_source_mini_centered_1024.ply')
+        else:
+            source_path = os.path.join(self.dataset_root, 'source', 'vtc_source_centered_1024.ply')
+        self.source = torch.from_numpy(np.array(o3d.io.read_point_cloud(source_path).points)).float()
+   
+    def uniform_downsample_point_cloud(self, point_cloud, num_points: int) -> np.ndarray:
+        """
+        Uniformly downsamples a point cloud to a given number of points.
+
+        Args:
+            point_cloud (numpy.ndarray): The original point cloud of shape (N, 3).
+            num_points (int): The desired number of points in the downsampled point cloud.
+
+        Returns:
+            numpy.ndarray: The downsampled point cloud of shape (num_points, 3).
+        """
+        np.random.seed(42)
+        if not isinstance(point_cloud, np.ndarray):
+            point_cloud = np.asarray(point_cloud.points)
+
+        # Ensure num_points is within the range [1, len(point_cloud)]
+        num_points = max(1, min(len(point_cloud), num_points))
+
+        # Shuffle the indices of the original point cloud
+        indices = np.arange(len(point_cloud))
+        np.random.shuffle(indices)
+
+        # Select the first num_points indices and create the downsampled point cloud
+        downsampled_point_cloud = point_cloud[indices[:num_points]]
+
+        return downsampled_point_cloud
+
+
+    def __len__(self):
+        return len(self.template_file_names)
+
+    def __getitem__(self, index):
+       
+        template = o3d.io.read_point_cloud(os.path.join(self.template_path, f"{self.template_file_names[index]}.pcd"))
+        if self.meter_scaled:
+            template = copy.deepcopy(template).scale(0.001, [0,0,0])
+        template = self.uniform_downsample_point_cloud(template, self.n_points)
+        template = torch.from_numpy(np.asarray(template)).float()
+       
+        igt = np.load(os.path.join(self.transformations_path, f"{self.template_file_names[index]}_mini_mtx.npy"))
+        igt = torch.from_numpy(igt).float()                          
+
+        return template, self.source, igt
 
 
 def train(args, net, train_loader, test_loader):
@@ -96,9 +167,9 @@ def main():
                         metavar='N', help='use gumbel_softmax to get the categorical sample')
     parser.add_argument('--dropout', type=float, default=0.0, metavar='N',
                         help='Dropout ratio in transformer')
-    parser.add_argument('--batch_size', type=int, default=36, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=2, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--test_batch_size', type=int, default=12, metavar='batch_size',
+    parser.add_argument('--test_batch_size', type=int, default=2, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--epochs', type=int, default=100, metavar='N',
                         help='number of episode to train ')
@@ -118,9 +189,9 @@ def main():
                         help='cycle consistency loss')
     parser.add_argument('--feature_alignment_loss', type=float, default=0.1, metavar='N',
                         help='feature alignment loss')
-    parser.add_argument('--gaussian_noise', type=bool, default=False, metavar='N',
+    parser.add_argument('--gaussian_noise', type=bool, default=True, metavar='N',
                         help='Wheter to add gaussian noise')
-    parser.add_argument('--unseen', type=bool, default=False, metavar='N',
+    parser.add_argument('--unseen', type=bool, default=True, metavar='N',
                         help='Wheter to test on unseen category')
     parser.add_argument('--n_points', type=int, default=1024, metavar='N',
                         help='Num of points to use')
@@ -132,6 +203,8 @@ def main():
                         help='Divided factor of rotation')
     parser.add_argument('--model_path', type=str, default='', metavar='N',
                         help='Pretrained model path')
+    parser.add_argument('--vtc_testing', type=bool, default=True, metavar='N',
+                        help='VTC Testing')
 
     args = parser.parse_args()
     torch.backends.cudnn.deterministic = True
@@ -146,19 +219,25 @@ def main():
                                              num_subsampled_points=args.n_subsampled_points,
                                              partition='train', gaussian_noise=args.gaussian_noise,
                                              unseen=args.unseen, rot_factor=args.rot_factor),
-                                  batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=6)
-        test_loader = DataLoader(ModelNet40(num_points=args.n_points,
-                                            num_subsampled_points=args.n_subsampled_points,
-                                            partition='test', gaussian_noise=args.gaussian_noise,
-                                            unseen=args.unseen, rot_factor=args.rot_factor),
-                                 batch_size=args.test_batch_size, shuffle=False, drop_last=False, num_workers=6)
+                                  batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=2)
+        
+        if args.vtc_testing:
+            vtc_path = 'C:/Users/hernan47/Documents/Data'
+            test_loader = DataLoader(VTCTestRegistrationData(vtc_path,n_points=args.n_points,meter_scaled=True),
+                                 batch_size=args.test_batch_size, shuffle=False, drop_last=False, num_workers=2)
+        else:
+            test_loader = DataLoader(ModelNet40(num_points=args.n_points,
+                                                num_subsampled_points=args.n_subsampled_points,
+                                                partition='test', gaussian_noise=args.gaussian_noise,
+                                                unseen=args.unseen, rot_factor=args.rot_factor),
+                                    batch_size=args.test_batch_size, shuffle=False, drop_last=False, num_workers=2)
     else:
         raise Exception("not implemented")
 
     if args.model == 'prnet':
         net = PRNet(args).cuda()
         if args.eval:
-            if args.model_path is '':
+            if args.model_path == '':
                 model_path = 'checkpoints' + '/' + args.exp_name + '/models/model.best.t7'
             else:
                 model_path = args.model_path

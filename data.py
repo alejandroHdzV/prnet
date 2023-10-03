@@ -40,7 +40,7 @@ def load_data(partition):
         all_label.append(label)
     all_data = np.concatenate(all_data, axis=0)
     all_label = np.concatenate(all_label, axis=0)
-    return all_data, all_label
+    return all_data[:10,:], all_label[:10,:]
 
 
 def translate_pointcloud(pointcloud):
