@@ -42,6 +42,7 @@ def pairwise_distance(src, tgt):
 
 
 def knn(x, k):
+    # print("knn x shape", x.size())
     inner = -2 * torch.matmul(x.transpose(2, 1).contiguous(), x)
     xx = torch.sum(x ** 2, dim=1, keepdim=True)
     distance = -xx - inner - xx.transpose(2, 1).contiguous()
@@ -699,6 +700,9 @@ class PRNet(nn.Module):
         for data in tqdm(train_loader):
             src, tgt, rotation_ab, translation_ab, rotation_ba, translation_ba, euler_ab, euler_ba = [d.cuda()
                                                                                                       for d in data]
+            
+            # print('sizes: ', src.size(), tgt.size(), rotation_ab.size(), translation_ab.size(), rotation_ba.size(), translation_ba.size(), euler_ab.size(), euler_ba.size())
+
             loss, feature_alignment_loss, cycle_consistency_loss, scale_consensus_loss,\
             rotation_ab_pred, translation_ab_pred = self._train_one_batch(src, tgt, rotation_ab, translation_ab,
                                                                                 opt)
@@ -766,6 +770,9 @@ class PRNet(nn.Module):
         for data in tqdm(test_loader):
             src, tgt, rotation_ab, translation_ab, rotation_ba, translation_ba, euler_ab, euler_ba = [d.cuda()
                                                                                                       for d in data]
+            
+            # print('sizes: ', src.size(), tgt.size(), rotation_ab.size(), translation_ab.size(), rotation_ba.size(), translation_ba.size(), euler_ab.size(), euler_ba.size())
+            
             loss, feature_alignment_loss, cycle_consistency_loss, scale_consensus_loss, \
             rotation_ab_pred, translation_ab_pred = self._test_one_batch(src, tgt, rotation_ab, translation_ab)
             batch_size = src.size(0)

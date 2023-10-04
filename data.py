@@ -40,7 +40,7 @@ def load_data(partition):
         all_label.append(label)
     all_data = np.concatenate(all_data, axis=0)
     all_label = np.concatenate(all_label, axis=0)
-    return all_data[:10,:], all_label[:10,:]
+    return all_data, all_label # [:10,:]
 
 
 def translate_pointcloud(pointcloud):
@@ -104,9 +104,9 @@ class ModelNet40(Dataset):
         pointcloud = self.data[item][:self.num_points]
         if self.partition != 'train':
             np.random.seed(item)
-        anglex = np.random.uniform() * np.pi / self.rot_factor
-        angley = np.random.uniform() * np.pi / self.rot_factor
-        anglez = np.random.uniform() * np.pi / self.rot_factor
+        anglex = np.random.uniform() * np.pi / 4
+        angley = np.random.uniform() * np.pi / 4
+        anglez = np.random.uniform() * np.pi / 0.8
         cosx = np.cos(anglex)
         cosy = np.cos(angley)
         cosz = np.cos(anglez)

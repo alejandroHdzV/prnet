@@ -140,7 +140,7 @@ def mat2pose_vec(rot_mat, translation_mat, rotation_mode='euler', seq='xyz'):
 def transform_point_cloud(point_cloud, rotation, translation):
     """
     :param point_cloud: [B, 3, N]
-    :param rotation: Euler angel [B, 3]
+    :param rotation: Quaternion [B, 3]
     :param translation: Translation [B, 3]
     :return:
     """

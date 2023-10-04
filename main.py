@@ -33,26 +33,28 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 import argparse
 import numpy as np
-import open3d as o3d
+# import open3d as o3d
 import os
+from scipy.spatial.transform import Rotation as R
+import h5py
 
 class VTCTestRegistrationData(Dataset):
-    def __init__(self, dataset_root, n_points, meter_scaled=True):
-        self.dataset_root = dataset_root
+
+    def __init__(self, dataset_path, n_points, meter_scaled=True):
+        self.dataset_path = dataset_path
         self.n_points = n_points
         self.meter_scaled = meter_scaled
-       
-        self.template_path = os.path.join(self.dataset_root, 'MaskedPointCloud')
-        self.transformations_path = os.path.join(self.dataset_root, 'Transformations')
-       
-        self.template_file_names = os.listdir(self.template_path)
-        self.template_file_names = [file[:-4] for file in self.template_file_names]
-       
-        if self.meter_scaled:
-            source_path = os.path.join(self.dataset_root, 'source', 'vtc_source_mini_centered_1024.ply')
-        else:
-            source_path = os.path.join(self.dataset_root, 'source', 'vtc_source_centered_1024.ply')
-        self.source = torch.from_numpy(np.array(o3d.io.read_point_cloud(source_path).points)).float()
+        
+        with h5py.File(self.dataset_path, "r") as f:
+            self.source = f['source']
+            self.source = self.uniform_downsample_point_cloud(np.asarray(self.source), n_points)
+            self.dataset_size = f['targets'].shape[0]
+            
+        if not self.meter_scaled:
+            self.source = self.source * 1000
+            
+        self.source = torch.from_numpy(self.source).float()
+        
    
     def uniform_downsample_point_cloud(self, point_cloud, num_points: int) -> np.ndarray:
         """
@@ -81,22 +83,42 @@ class VTCTestRegistrationData(Dataset):
 
         return downsampled_point_cloud
 
-
     def __len__(self):
-        return len(self.template_file_names)
+        return self.dataset_size
+    
+    def get_transformations(self, igt):
+        R_ba = igt[:, 0:3, 0:3]								# Ps = R_ba * Pt
+        translation_ba = igt[:, 0:3, 3].unsqueeze(2)		# Ps = Pt + t_ba
+        R_ab = R_ba.permute(0, 2, 1)						# Pt = R_ab * Ps
+        translation_ab = -torch.bmm(R_ab, translation_ba)	# Pt = Ps + t_ab
+        return R_ab[0], translation_ab[0], R_ba[0], translation_ba[0]
 
     def __getitem__(self, index):
+        
+        with h5py.File(self.dataset_path, "r") as f:
        
-        template = o3d.io.read_point_cloud(os.path.join(self.template_path, f"{self.template_file_names[index]}.pcd"))
-        if self.meter_scaled:
-            template = copy.deepcopy(template).scale(0.001, [0,0,0])
+            template = np.asarray(f['targets'][index])
+            igt = np.asarray(f['transformations'][index])
+        
         template = self.uniform_downsample_point_cloud(template, self.n_points)
         template = torch.from_numpy(np.asarray(template)).float()
-       
-        igt = np.load(os.path.join(self.transformations_path, f"{self.template_file_names[index]}_mini_mtx.npy"))
-        igt = torch.from_numpy(igt).float()                          
+        
+        if not self.meter_scaled:
+            template = template * 1000
+            igt[:3,3] = igt[:3,3] * 1000
 
-        return template, self.source, igt
+        igt = torch.from_numpy(igt).float() # igt 4x4, source -> target
+
+        R_ab, translation_ab, R_ba, translation_ba = self.get_transformations(igt.view(1,4,4))
+        euler_ab = torch.from_numpy(R.from_matrix(R_ab.detach().cpu().numpy()).as_euler('zyx')).float()
+        euler_ba = torch.from_numpy(R.from_matrix(R_ba.detach().cpu().numpy()).as_euler('zyx')).float()
+        
+       #  torch.Size([2, 3, 3]) torch.Size([2, 3]) torch.Size([2, 3, 3]) torch.Size([2, 3]) torch.Size([2, 3]) torch.Size([2, 3])
+        
+#         a, b, R_ab, t_at, R_ba, t_ba
+        return template.T, self.source.T, R_ab, translation_ab.view(3), R_ba, translation_ba.view(3), euler_ab.view(3), euler_ba.view(3)
+
+
 
 
 def train(args, net, train_loader, test_loader):
@@ -125,10 +147,28 @@ def train(args, net, train_loader, test_loader):
             info_test_best['stage'] = 'best_test'
 
             net.save('checkpoints/%s/models/model.best.t7' % args.exp_name)
+
+            torch.save({
+            'epoch': epoch,
+            'model_state_dict': net.state_dict(),
+            'optimizer_state_dict': opt.state_dict(),
+            'loss': info_test_best
+            }, 'checkpoints/%s/models/model.best.state_dicts.tar' % args.exp_name)
+
+            
+            
         net.logger.write(info_test_best)
 
         net.save('checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
         gc.collect()
+
+
+def test(args, net, test_loader):
+
+    info_test = net._test_one_epoch(epoch=0, test_loader=test_loader)
+    print(info_test)
+        
+
 
 
 def main():
@@ -144,7 +184,7 @@ def main():
     parser.add_argument('--attention', type=str, default='transformer', metavar='N',
                         choices=['identity', 'transformer'],
                         help='Head to use, [identity, transformer]')
-    parser.add_argument('--head', type=str, default='svd', metavar='N',
+    parser.add_argument('--head', type=str, default='mlp', metavar='N',
                         choices=['mlp', 'svd'],
                         help='Head to use, [mlp, svd]')
     parser.add_argument('--n_emb_dims', type=int, default=512, metavar='N',
@@ -165,11 +205,11 @@ def main():
                         help='Factor to control the softmax precision')
     parser.add_argument('--cat_sampler', type=str, default='gumbel_softmax', choices=['softmax', 'gumbel_softmax'],
                         metavar='N', help='use gumbel_softmax to get the categorical sample')
-    parser.add_argument('--dropout', type=float, default=0.0, metavar='N',
+    parser.add_argument('--dropout', type=float, default=0.05, metavar='N',
                         help='Dropout ratio in transformer')
     parser.add_argument('--batch_size', type=int, default=2, metavar='batch_size',
                         help='Size of batch)')
-    parser.add_argument('--test_batch_size', type=int, default=2, metavar='batch_size',
+    parser.add_argument('--test_batch_size', type=int, default=1, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--epochs', type=int, default=100, metavar='N',
                         help='number of episode to train ')
@@ -195,6 +235,8 @@ def main():
                         help='Wheter to test on unseen category')
     parser.add_argument('--n_points', type=int, default=1024, metavar='N',
                         help='Num of points to use')
+    parser.add_argument('--n_workers', type=int, default=2, metavar='N',
+                        help='Num of points to use')
     parser.add_argument('--n_subsampled_points', type=int, default=768, metavar='N',
                         help='Num of subsampled points to use')
     parser.add_argument('--dataset', type=str, default='modelnet40', choices=['modelnet40'], metavar='N',
@@ -206,7 +248,7 @@ def main():
     parser.add_argument('--vtc_testing', type=bool, default=True, metavar='N',
                         help='VTC Testing')
 
-    args = parser.parse_args()
+    args = parser.parse_args('')
     torch.backends.cudnn.deterministic = True
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
@@ -219,18 +261,18 @@ def main():
                                              num_subsampled_points=args.n_subsampled_points,
                                              partition='train', gaussian_noise=args.gaussian_noise,
                                              unseen=args.unseen, rot_factor=args.rot_factor),
-                                  batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=2)
+                                  batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
         
         if args.vtc_testing:
-            vtc_path = 'C:/Users/hernan47/Documents/Data'
-            test_loader = DataLoader(VTCTestRegistrationData(vtc_path,n_points=args.n_points,meter_scaled=True),
-                                 batch_size=args.test_batch_size, shuffle=False, drop_last=False, num_workers=2)
+            vtc_path = 'vtc_testing_dataset.hdf5'
+            test_loader = DataLoader(VTCTestRegistrationData(vtc_path, n_points=args.n_points, meter_scaled=True),
+                                 batch_size=args.test_batch_size, shuffle=False, drop_last=False, num_workers=args.n_workers)
         else:
             test_loader = DataLoader(ModelNet40(num_points=args.n_points,
                                                 num_subsampled_points=args.n_subsampled_points,
                                                 partition='test', gaussian_noise=args.gaussian_noise,
                                                 unseen=args.unseen, rot_factor=args.rot_factor),
-                                    batch_size=args.test_batch_size, shuffle=False, drop_last=False, num_workers=2)
+                                    batch_size=args.test_batch_size, shuffle=False, drop_last=False, num_workers=args.n_workers)
     else:
         raise Exception("not implemented")
 
@@ -244,10 +286,15 @@ def main():
             if not os.path.exists(model_path):
                 print("can't find pretrained model")
                 return
+            else:
+                net = torch.load(model_path)
+                net.eval()
     else:
         raise Exception('Not implemented')
     if not args.eval:
         train(args, net, train_loader, test_loader)
+    else:
+        test(args, net, test_loader)
 
     print('FINISH')
 
