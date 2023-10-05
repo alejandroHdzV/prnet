@@ -10,18 +10,18 @@ class VTCTestRegistrationData(Dataset):
         self.dataset_path = dataset_path
         self.n_points = n_points
         self.meter_scaled = meter_scaled
+        self.scale_factor = 2
         
         with h5py.File(self.dataset_path, "r") as f:
             self.source = f['source']
             self.source = self.uniform_downsample_point_cloud(np.asarray(self.source), n_points)
             self.dataset_size = f['targets'].shape[0]
             
-        if not self.meter_scaled:
-            self.source = self.source * 1000
+        # if not self.meter_scaled:
+        self.source = self.source * self.scale_factor
             
         self.source = torch.from_numpy(self.source).float()
         
-   
     def uniform_downsample_point_cloud(self, point_cloud, num_points: int) -> np.ndarray:
         """
         Uniformly downsamples a point cloud to a given number of points.
@@ -69,9 +69,9 @@ class VTCTestRegistrationData(Dataset):
         template = self.uniform_downsample_point_cloud(template, self.n_points)
         template = torch.from_numpy(np.asarray(template)).float()
         
-        if not self.meter_scaled:
-            template = template * 1000
-            igt[:3,3] = igt[:3,3] * 1000
+        # if not self.meter_scaled:
+        template = template * self.scale_factor
+        igt[:3,3] = igt[:3,3] * self.scale_factor
 
         igt = torch.from_numpy(igt).float() # igt 4x4, source -> target
 
