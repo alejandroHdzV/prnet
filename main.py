@@ -12,6 +12,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import MultiStepLR
 from data import ModelNet40
 from vtctestregistrationdata import VTCTestRegistrationData
+from generatedtrainingdata import GeneratedTrainingData
 import numpy as np
 from torch.utils.data import DataLoader
 from model import PRNet
@@ -93,7 +94,7 @@ def test(args, net, test_loader):
 
 def main():
     parser = argparse.ArgumentParser(description='Point Cloud Registration')
-    parser.add_argument('--exp_name', type=str, default='exp', metavar='N',
+    parser.add_argument('--exp_name', type=str, default='exp_own_data_svd', metavar='N',
                         help='Name of the experiment')
     parser.add_argument('--model', type=str, default='prnet', metavar='N',
                         choices=['prnet'],
@@ -104,7 +105,7 @@ def main():
     parser.add_argument('--attention', type=str, default='transformer', metavar='N',
                         choices=['identity', 'transformer'],
                         help='Head to use, [identity, transformer]')
-    parser.add_argument('--head', type=str, default='mlp', metavar='N',
+    parser.add_argument('--head', type=str, default='svd', metavar='N',
                         choices=['mlp', 'svd'],
                         help='Head to use, [mlp, svd]')
     parser.add_argument('--n_emb_dims', type=int, default=512, metavar='N',
@@ -127,10 +128,12 @@ def main():
                         metavar='N', help='use gumbel_softmax to get the categorical sample')
     parser.add_argument('--dropout', type=float, default=0.05, metavar='N',
                         help='Dropout ratio in transformer')
+    
     parser.add_argument('--batch_size', type=int, default=2, metavar='batch_size',
                         help='Size of batch)')
     parser.add_argument('--test_batch_size', type=int, default=1, metavar='batch_size',
                         help='Size of batch)')
+    
     parser.add_argument('--epochs', type=int, default=100, metavar='N',
                         help='number of episode to train ')
     parser.add_argument('--use_sgd', type=bool, default=False,
@@ -167,6 +170,8 @@ def main():
                         help='Pretrained model path')
     parser.add_argument('--vtc_testing', type=bool, default=True, metavar='N',
                         help='VTC Testing')
+    parser.add_argument('--own_data', type=bool, default=True, metavar='N',
+                        help='Synthetically generated data')
 
     args = parser.parse_args('')
     torch.backends.cudnn.deterministic = True
@@ -177,11 +182,16 @@ def main():
     _init_(args)
 
     if args.dataset == 'modelnet40':
-        train_loader = DataLoader(ModelNet40(num_points=args.n_points,
-                                             num_subsampled_points=args.n_subsampled_points,
-                                             partition='train', gaussian_noise=args.gaussian_noise,
-                                             unseen=args.unseen, rot_factor=args.rot_factor),
-                                  batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
+        if args.own_data:
+            generated_training_data_path = 'generated_training_dataset.hdf5'
+            train_loader = DataLoader(GeneratedTrainingData(None, generated_training_data_path),
+                                    batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
+        else:
+            train_loader = DataLoader(ModelNet40(num_points=args.n_points,
+                                                num_subsampled_points=args.n_subsampled_points,
+                                                partition='train', gaussian_noise=args.gaussian_noise,
+                                                unseen=args.unseen, rot_factor=args.rot_factor),
+                                    batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
         
         if args.vtc_testing:
             vtc_path = 'vtc_testing_dataset.hdf5'

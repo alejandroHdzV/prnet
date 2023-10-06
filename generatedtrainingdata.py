@@ -41,8 +41,8 @@ class GeneratedTrainingData(Dataset):
     
     def get_random_transformation_matrix(self):
         z_max = 270#args.Rz_max
-        xy_max = 35#args.Rxy_max
-        t_max = 1#args.t_max
+        xy_max = 15#args.Rxy_max
+        t_max = 0.5#args.t_max
         
         t = [random.uniform(-t_max,t_max),
              random.uniform(-t_max,t_max),
