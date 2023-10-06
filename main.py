@@ -3,6 +3,7 @@
 
 
 from __future__ import print_function
+import matplotlib.pyplot as plt
 import os
 import gc
 import argparse
@@ -57,6 +58,9 @@ def train(args, net, train_loader, test_loader):
 
     info_test_best = None
 
+    loss_tracking = []
+    val_tracking = []
+
     for epoch in range(args.epochs):
         scheduler.step()
         info_train = net._train_one_epoch(epoch=epoch, train_loader=train_loader, opt=opt)
@@ -75,8 +79,10 @@ def train(args, net, train_loader, test_loader):
             'loss': info_test_best
             }, 'checkpoints/%s/models/model.best.state_dicts.tar' % args.exp_name)
 
-            
-            
+        loss_tracking.append(info_train['loss'].cpu().detach().clone().numpy())
+        val_tracking.append(info_test['loss'].cpu().detach().clone().numpy())
+        plot_accuracy_and_loss(loss_tracking, val_tracking)
+
         net.logger.write(info_test_best)
 
         net.save('checkpoints/%s/models/model.%d.t7' % (args.exp_name, epoch))
@@ -89,6 +95,23 @@ def test(args, net, test_loader):
     print(info_test)
         
 
+def plot_accuracy_and_loss(loss_train, loss_val):
+    """Plot two numpy arrays on two different axis"""
+    fig, ax1 = plt.subplots()
+    color = 'tab:red'
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss', color=color)
+    ax1.plot(loss_train, color=color)
+    ax1.plot(loss_val, color='tab:blue')
+    ax1.tick_params(axis='y', labelcolor=color)
+    # ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+    # color = 'tab:blue'
+    # ax2.set_ylabel('Accuracy', color=color)
+    # ax2.plot(acc, color=color)
+    # # ax2.plot(val_tracking, color='tab:green')
+    # ax2.tick_params(axis='y', labelcolor=color)
+    fig.tight_layout()
+    plt.show()
 
 
 def main():
