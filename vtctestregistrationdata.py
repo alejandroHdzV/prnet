@@ -10,7 +10,7 @@ class VTCTestRegistrationData(Dataset):
         self.dataset_path = dataset_path
         self.n_points = n_points
         self.meter_scaled = meter_scaled
-        self.scale_factor = 2
+        self.scale_factor = 2.3
         
         with h5py.File(self.dataset_path, "r") as f:
             self.source = f['source']

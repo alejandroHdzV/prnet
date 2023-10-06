@@ -13,6 +13,7 @@ import numpy as np
 import open3d as o3d
 from scipy.spatial.transform import Rotation as R
 from vtctestregistrationdata import VTCTestRegistrationData
+from generatedtrainingdata import GeneratedTrainingData
 
 
 def draw_registration_result(source, target, transformation):
@@ -37,20 +38,18 @@ def initialize_pointcloud(pts):
 
 
 #########
-trainset = ModelNet40(num_points=1024,
-                                             num_subsampled_points=768,
-                                             partition='train', gaussian_noise=True,
-                                             unseen=False, rot_factor=4)
-        
+generated_training_data_path = 'generated_training_dataset.hdf5'
+trainset = GeneratedTrainingData(None, generated_training_data_path)
+
 vtc_path = 'vtc_testing_dataset.hdf5'
 testset = VTCTestRegistrationData(vtc_path, n_points=1024, meter_scaled=True)
 
 #########
 
 
-idx = 3
+idx = 2
 test_cts = testset[idx]
-scaling = 2
+scaling = 1
 t = initialize_pointcloud(test_cts[0].T.detach().cpu().numpy()*scaling)
 s = initialize_pointcloud(test_cts[1].T.detach().cpu().numpy()*scaling)
 transform = np.eye(4)
@@ -67,8 +66,8 @@ transform[:3, :3] = train_cts[2]
 transform[:3, 3] = train_cts[3]
 
 print(transform)
-# draw_registration_result(t_train,s_train,transform)
-
+draw_registration_result(t_train,s_train,np.eye(4))
+draw_registration_result(t_train,s_train,transform)
 
 
 o3d.visualization.draw_geometries([t_train, s_train, t, s])
