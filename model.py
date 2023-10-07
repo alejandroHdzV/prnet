@@ -325,12 +325,15 @@ class MLPHead(nn.Module):
         n_emb_dims = args.n_emb_dims
         self.n_emb_dims = n_emb_dims
         self.nn = nn.Sequential(nn.Linear(n_emb_dims*2, n_emb_dims//2),
+                                nn.Dropout(args.dropout),
                                 nn.BatchNorm1d(n_emb_dims//2),
                                 nn.ReLU(),
                                 nn.Linear(n_emb_dims//2, n_emb_dims//4),
+                                nn.Dropout(args.dropout),
                                 nn.BatchNorm1d(n_emb_dims//4),
                                 nn.ReLU(),
                                 nn.Linear(n_emb_dims//4, n_emb_dims//8),
+                                nn.Dropout(args.dropout),
                                 nn.BatchNorm1d(n_emb_dims//8),
                                 nn.ReLU())
         self.proj_rot = nn.Linear(n_emb_dims//8, 4)
@@ -455,7 +458,9 @@ class SVDHead(nn.Module):
         R = []
 
         for i in range(src.size(0)):
-            u, s, v = torch.svd(H[i])
+
+            svd_ = torch.nan_to_num(H[i], nan=0.0)
+            u, s, v = torch.svd(svd_)
             r = torch.matmul(v, u.transpose(1, 0)).contiguous()
             r_det = torch.det(r).item()
             diag = torch.from_numpy(np.array([[1.0, 0, 0],

@@ -36,7 +36,6 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 import argparse
 import numpy as np
-# import open3d as o3d
 import os
 from scipy.spatial.transform import Rotation as R
 import h5py
@@ -63,7 +62,7 @@ def train(args, net, train_loader, test_loader):
     val_tracking = []
 
     for epoch in range(args.epochs):
-        scheduler.step()
+        
         info_train = net._train_one_epoch(epoch=epoch, train_loader=train_loader, opt=opt)
         info_test = net._test_one_epoch(epoch=epoch, test_loader=test_loader)
 
@@ -80,8 +79,9 @@ def train(args, net, train_loader, test_loader):
             'loss': info_test_best
             }, 'checkpoints/%s/models/model.best.state_dicts.tar' % args.exp_name)
 
-        loss_tracking.append(info_train['loss'].cpu().detach().clone().numpy())
-        val_tracking.append(info_test['loss'].cpu().detach().clone().numpy())
+        scheduler.step()
+        loss_tracking.append(info_train['loss'])
+        val_tracking.append(info_test['loss'])
         plot_accuracy_and_loss(loss_tracking, val_tracking)
 
         net.logger.write(info_test_best)
@@ -100,24 +100,17 @@ def plot_accuracy_and_loss(loss_train, loss_val):
     """Plot two numpy arrays on two different axis"""
     fig, ax1 = plt.subplots()
     color = 'tab:red'
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Loss', color=color)
-    ax1.plot(loss_train, color=color)
-    ax1.plot(loss_val, color='tab:blue')
-    ax1.tick_params(axis='y', labelcolor=color)
-    # ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-    # color = 'tab:blue'
-    # ax2.set_ylabel('Accuracy', color=color)
-    # ax2.plot(acc, color=color)
-    # # ax2.plot(val_tracking, color='tab:green')
-    # ax2.tick_params(axis='y', labelcolor=color)
-    fig.tight_layout()
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.plot(loss_train, color='red')
+    plt.plot(loss_val, color='blue')
+    plt.legend(['Training loss', 'Validation loss']) 
     plt.show()
 
 
 def main():
     parser = argparse.ArgumentParser(description='Point Cloud Registration')
-    parser.add_argument('--exp_name', type=str, default='exp_own_data_svd', metavar='N',
+    parser.add_argument('--exp_name', type=str, default='exp_own_data_svd_2', metavar='N',
                         help='Name of the experiment')
     parser.add_argument('--model', type=str, default='prnet', metavar='N',
                         choices=['prnet'],
@@ -127,10 +120,12 @@ def main():
                         help='Embedding to use, [pointnet, dgcnn]')
     parser.add_argument('--attention', type=str, default='transformer', metavar='N',
                         choices=['identity', 'transformer'],
+
                         help='Head to use, [identity, transformer]')
-    parser.add_argument('--head', type=str, default='svd', metavar='N',
+    parser.add_argument('--head', type=str, default='mlp', metavar='N',
                         choices=['mlp', 'svd'],
                         help='Head to use, [mlp, svd]')
+    
     parser.add_argument('--n_emb_dims', type=int, default=512, metavar='N',
                         help='Dimension of embeddings')
     parser.add_argument('--n_blocks', type=int, default=1, metavar='N',
