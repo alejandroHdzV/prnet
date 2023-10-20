@@ -10,9 +10,10 @@ from corruptedpointcloud import CorruptedPointCloud
 
 class GeneratedTrainingData(Dataset):
 
-    def __init__(self, args, dataset_path):
+    def __init__(self, args, dataset_path, n_points = 1024):
         self.dataset_path = dataset_path
         self.args = args
+        self.n_points = n_points
         # args.n_points
         # args.normalize
         self.scale_factor = 1
@@ -40,9 +41,9 @@ class GeneratedTrainingData(Dataset):
         return points
     
     def get_random_transformation_matrix(self):
-        z_max = 25#args.Rz_max
-        xy_max = 15#args.Rxy_max
-        t_max = 0.6#args.t_max
+        z_max = 15  #args.Rz_max
+        xy_max = 15 #args.Rxy_max
+        t_max = 0.5 #args.t_max
         
         t = [random.uniform(-t_max,t_max),
              random.uniform(-t_max,t_max),
@@ -62,7 +63,7 @@ class GeneratedTrainingData(Dataset):
 
 
     def __getitem__(self, index):
-        n_points = 1024
+        n_points = self.n_points
         severity = 1
         source = np.asarray(self.point_cloud_data[index])
         source, _ = CorruptedPointCloud(source).normalize_points()
@@ -73,20 +74,20 @@ class GeneratedTrainingData(Dataset):
 
         template = CorruptedPointCloud(template).random_crop_point_cloud_with_plane(1)
 
-        opt = random.choice(['cutout', 'density_inc','farthest_subsample_points','None'])
+        opt = random.choice(['cutout','farthest_subsample_points','None'])
         if opt == 'cutout':
             template = CorruptedPointCloud(template).cutout(1)
-        elif opt == 'density_inc':
-            template = CorruptedPointCloud(template).density_inc(severity)
+        # elif opt == 'density_inc':
+        #     template = CorruptedPointCloud(template).density_inc(severity)
         elif opt == 'farthest_subsample_points':
-            template = CorruptedPointCloud(template).farthest_subsample_points(2)
+            template = CorruptedPointCloud(template).farthest_subsample_points(1)
 
 
-        opt = random.choice(['gaussian_noise', 'background_noise','uniform_noise', 'jitter_pointcloud', 'None']) # 
+        opt = random.choice(['gaussian_noise','uniform_noise', 'jitter_pointcloud', 'None']) # 
         if opt == 'gaussian_noise':
             template = CorruptedPointCloud(template).gaussian_noise(severity)
-        elif opt == 'background_noise':
-            template = CorruptedPointCloud(template).background_noise(severity)
+        # elif opt == 'background_noise':
+        #     template = CorruptedPointCloud(template).background_noise(severity)
         elif opt == 'uniform_noise':
             template = CorruptedPointCloud(template).uniform_noise(severity)
         elif opt == 'uniform_noise':
