@@ -73,10 +73,10 @@ def train(args, net, train_loader, test_loader):
             net.save('checkpoints/%s/models/model.best.t7' % args.exp_name)
 
             torch.save({
-            'epoch': epoch,
-            'model_state_dict': net.state_dict(),
-            'optimizer_state_dict': opt.state_dict(),
-            'loss': info_test_best
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': opt.state_dict(),
+                'loss': info_test_best
             }, 'checkpoints/%s/models/model.best.state_dicts.tar' % args.exp_name)
 
         scheduler.step()
@@ -110,7 +110,7 @@ def plot_accuracy_and_loss(loss_train, loss_val):
 
 def main():
     parser = argparse.ArgumentParser(description='Point Cloud Registration')
-    parser.add_argument('--exp_name', type=str, default='exp_own_data_svd_train_on_testdata_pointnet', metavar='N',
+    parser.add_argument('--exp_name', type=str, default='exp_own_data_train_on_testdata_01', metavar='N',
                         help='Name of the experiment')
     parser.add_argument('--model', type=str, default='prnet', metavar='N',
                         choices=['prnet'],
@@ -155,27 +155,21 @@ def main():
     parser.add_argument('--epochs', type=int, default=200, metavar='N',
                         help='number of episode to train ')
     
-    
-    
     ############# TRAINING HYPERPARAMETERS #############
     parser.add_argument('--use_sgd', type=bool, default=False,
                         help='Use SGD')
+    
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
                         help='learning rate (default: 0.001, 0.1 if using sgd)')
+    
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M',
                         help='SGD momentum (default: 0.9)')
     parser.add_argument('--no_cuda', action='store_true', default=False,
                         help='enables CUDA training')
-    
-    parser.add_argument('--eval', action='store_true', default=False,
-                        help='evaluate the model')
-
-
     parser.add_argument('--seed', type=int, default=1234, metavar='S',
                         help='random seed (default: 1)')
-    
-    
-    
+    parser.add_argument('--eval', action='store_true', default=False,
+                        help='evaluate the model')
     parser.add_argument('--cycle_consistency_loss', type=float, default=0.1, metavar='N',
                         help='cycle consistency loss')
     parser.add_argument('--feature_alignment_loss', type=float, default=0.1, metavar='N',
@@ -215,7 +209,7 @@ def main():
             # train_loader = DataLoader(GeneratedTrainingData(None, generated_training_data_path),
             #                         batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
             vtc_path = 'vtc_testing_dataset.hdf5'
-            train_loader = DataLoader(VTCTestRegistrationData(vtc_path, n_points=args.n_points, meter_scaled=True),
+            test_loader = DataLoader(VTCTestRegistrationData(vtc_path, n_points=args.n_points, meter_scaled=True),
                                  batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
         else:
             train_loader = DataLoader(ModelNet40(num_points=args.n_points,
