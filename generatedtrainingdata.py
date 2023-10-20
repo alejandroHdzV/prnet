@@ -40,9 +40,9 @@ class GeneratedTrainingData(Dataset):
         return points
     
     def get_random_transformation_matrix(self):
-        z_max = 270#args.Rz_max
+        z_max = 25#args.Rz_max
         xy_max = 15#args.Rxy_max
-        t_max = 0.5#args.t_max
+        t_max = 0.6#args.t_max
         
         t = [random.uniform(-t_max,t_max),
              random.uniform(-t_max,t_max),
@@ -71,7 +71,7 @@ class GeneratedTrainingData(Dataset):
         template = self.apply_transform(source, igt)
 
 
-        template = CorruptedPointCloud(template).random_crop_point_cloud_with_plane(2)
+        template = CorruptedPointCloud(template).random_crop_point_cloud_with_plane(1)
 
         opt = random.choice(['cutout', 'density_inc','farthest_subsample_points','None'])
         if opt == 'cutout':

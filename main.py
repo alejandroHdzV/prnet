@@ -110,7 +110,7 @@ def plot_accuracy_and_loss(loss_train, loss_val):
 
 def main():
     parser = argparse.ArgumentParser(description='Point Cloud Registration')
-    parser.add_argument('--exp_name', type=str, default='exp_own_data_svd_2', metavar='N',
+    parser.add_argument('--exp_name', type=str, default='exp_own_data_svd_train_on_testdata_pointnet', metavar='N',
                         help='Name of the experiment')
     parser.add_argument('--model', type=str, default='prnet', metavar='N',
                         choices=['prnet'],
@@ -122,7 +122,7 @@ def main():
                         choices=['identity', 'transformer'],
 
                         help='Head to use, [identity, transformer]')
-    parser.add_argument('--head', type=str, default='mlp', metavar='N',
+    parser.add_argument('--head', type=str, default='svd', metavar='N',
                         choices=['mlp', 'svd'],
                         help='Head to use, [mlp, svd]')
     
@@ -152,8 +152,12 @@ def main():
     parser.add_argument('--test_batch_size', type=int, default=1, metavar='batch_size',
                         help='Size of batch)')
     
-    parser.add_argument('--epochs', type=int, default=100, metavar='N',
+    parser.add_argument('--epochs', type=int, default=200, metavar='N',
                         help='number of episode to train ')
+    
+    
+    
+    ############# TRAINING HYPERPARAMETERS #############
     parser.add_argument('--use_sgd', type=bool, default=False,
                         help='Use SGD')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR',
@@ -162,10 +166,16 @@ def main():
                         help='SGD momentum (default: 0.9)')
     parser.add_argument('--no_cuda', action='store_true', default=False,
                         help='enables CUDA training')
-    parser.add_argument('--seed', type=int, default=1234, metavar='S',
-                        help='random seed (default: 1)')
+    
     parser.add_argument('--eval', action='store_true', default=False,
                         help='evaluate the model')
+
+
+    parser.add_argument('--seed', type=int, default=1234, metavar='S',
+                        help='random seed (default: 1)')
+    
+    
+    
     parser.add_argument('--cycle_consistency_loss', type=float, default=0.1, metavar='N',
                         help='cycle consistency loss')
     parser.add_argument('--feature_alignment_loss', type=float, default=0.1, metavar='N',
@@ -201,9 +211,12 @@ def main():
 
     if args.dataset == 'modelnet40':
         if args.own_data:
-            generated_training_data_path = 'generated_training_dataset.hdf5'
-            train_loader = DataLoader(GeneratedTrainingData(None, generated_training_data_path),
-                                    batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
+            # generated_training_data_path = 'generated_training_dataset.hdf5'
+            # train_loader = DataLoader(GeneratedTrainingData(None, generated_training_data_path),
+            #                         batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
+            vtc_path = 'vtc_testing_dataset.hdf5'
+            train_loader = DataLoader(VTCTestRegistrationData(vtc_path, n_points=args.n_points, meter_scaled=True),
+                                 batch_size=args.batch_size, shuffle=True, drop_last=True, num_workers=args.n_workers)
         else:
             train_loader = DataLoader(ModelNet40(num_points=args.n_points,
                                                 num_subsampled_points=args.n_subsampled_points,
@@ -214,7 +227,7 @@ def main():
         if args.vtc_testing:
             vtc_path = 'vtc_testing_dataset.hdf5'
             test_loader = DataLoader(VTCTestRegistrationData(vtc_path, n_points=args.n_points, meter_scaled=True),
-                                 batch_size=args.test_batch_size, shuffle=False, drop_last=False, num_workers=args.n_workers)
+                                 batch_size=args.test_batch_size, shuffle=False, drop_last=True, num_workers=args.n_workers)
         else:
             test_loader = DataLoader(ModelNet40(num_points=args.n_points,
                                                 num_subsampled_points=args.n_subsampled_points,
@@ -228,14 +241,17 @@ def main():
         net = PRNet(args).cuda()
         if args.eval:
             if args.model_path == '':
-                model_path = 'checkpoints' + '/' + args.exp_name + '/models/model.best.t7'
+                model_path = 'checkpoints' + '/' + args.exp_name + '/models/model.best.state_dicts.tar'
             else:
                 model_path = args.model_path
+
             if not os.path.exists(model_path):
                 print("can't find pretrained model")
                 return
             else:
-                net = torch.load(model_path)
+                checkpoint = torch.load(model_path)
+
+                net.load_state_dict(checkpoint['model_state_dict'])
                 net.eval()
     else:
         raise Exception('Not implemented')

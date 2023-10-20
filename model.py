@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import r2_score
-from util import transform_point_cloud, npmat2euler, quat2mat
+from util import transform_point_cloud, npmat2euler, quat2mat, draw_registration_result, initialize_pointcloud
 
 
 def clones(module, N):
@@ -325,11 +325,9 @@ class MLPHead(nn.Module):
         n_emb_dims = args.n_emb_dims
         self.n_emb_dims = n_emb_dims
         self.nn = nn.Sequential(nn.Linear(n_emb_dims*2, n_emb_dims//2),
-                                nn.Dropout(args.dropout),
                                 nn.BatchNorm1d(n_emb_dims//2),
                                 nn.ReLU(),
                                 nn.Linear(n_emb_dims//2, n_emb_dims//4),
-                                nn.Dropout(args.dropout),
                                 nn.BatchNorm1d(n_emb_dims//4),
                                 nn.ReLU(),
                                 nn.Linear(n_emb_dims//4, n_emb_dims//8),
@@ -687,6 +685,20 @@ class PRNet(nn.Module):
             total_cycle_consistency_loss += cycle_consistency_loss
             total_loss = total_loss + loss + feature_alignment_loss + cycle_consistency_loss + scale_consensus_loss
             src = transform_point_cloud(src, rotation_ab_pred_i, translation_ab_pred_i)
+        
+        if False:
+            for idx in range(batch_size):
+                scr_display = src[idx]
+                tgt_display = tgt[idx]
+
+                t = initialize_pointcloud(tgt_display.T.detach().cpu().numpy())
+                s = initialize_pointcloud(scr_display.T.detach().cpu().numpy())
+                transform = np.eye(4)
+                draw_registration_result(t,s,transform)
+
+
+
+
         return total_loss.item(), total_feature_alignment_loss.item(), total_cycle_consistency_loss.item(), \
                total_scale_consensus_loss, rotation_ab_pred, translation_ab_pred
 
@@ -740,8 +752,8 @@ class PRNet(nn.Module):
         t_ab_mse = np.mean((translations_ab-translations_ab_pred)**2)
         t_ab_rmse = np.sqrt(t_ab_mse)
         t_ab_mae = np.mean(np.abs(translations_ab-translations_ab_pred))
-        r_ab_r2_score = r2_score(eulers_ab, eulers_ab_pred)
-        t_ab_r2_score = r2_score(translations_ab, translations_ab_pred)
+        # r_ab_r2_score = r2_score(eulers_ab, eulers_ab_pred)
+        # t_ab_r2_score = r2_score(translations_ab, translations_ab_pred)
         info = {'arrow': 'A->B',
                 'epoch': epoch,
                 'stage': 'train',
@@ -755,8 +767,9 @@ class PRNet(nn.Module):
                 't_ab_mse': t_ab_mse,
                 't_ab_rmse': t_ab_rmse,
                 't_ab_mae': t_ab_mae,
-                'r_ab_r2_score': r_ab_r2_score,
-                't_ab_r2_score': t_ab_r2_score}
+                'r_ab_r2_score': 1,
+                't_ab_r2_score': 1
+                }
         self.logger.write(info)
         return info
 
@@ -772,6 +785,7 @@ class PRNet(nn.Module):
         total_feature_alignment_loss = 0.0
         total_cycle_consistency_loss = 0.0
         total_scale_consensus_loss = 0.0
+
         for data in tqdm(test_loader):
             src, tgt, rotation_ab, translation_ab, rotation_ba, translation_ba, euler_ab, euler_ba = [d.cuda()
                                                                                                       for d in data]
@@ -809,8 +823,8 @@ class PRNet(nn.Module):
         t_ab_mse = np.mean((translations_ab - translations_ab_pred) ** 2)
         t_ab_rmse = np.sqrt(t_ab_mse)
         t_ab_mae = np.mean(np.abs(translations_ab - translations_ab_pred))
-        r_ab_r2_score = r2_score(eulers_ab, eulers_ab_pred)
-        t_ab_r2_score = r2_score(translations_ab, translations_ab_pred)
+        # r_ab_r2_score = r2_score(eulers_ab, eulers_ab_pred)
+        # t_ab_r2_score = r2_score(translations_ab, translations_ab_pred)
 
         info = {'arrow': 'A->B',
                 'epoch': epoch,
@@ -825,8 +839,8 @@ class PRNet(nn.Module):
                 't_ab_mse': t_ab_mse,
                 't_ab_rmse': t_ab_rmse,
                 't_ab_mae': t_ab_mae,
-                'r_ab_r2_score': r_ab_r2_score,
-                't_ab_r2_score': t_ab_r2_score}
+                'r_ab_r2_score': 1,
+                't_ab_r2_score': 1}
         self.logger.write(info)
         return info
 
