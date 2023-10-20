@@ -687,6 +687,7 @@ class PRNet(nn.Module):
             src = transform_point_cloud(src, rotation_ab_pred_i, translation_ab_pred_i)
         
         if False:
+        # This is for visualize the result of the registration in Open3D Visualizer
             for idx in range(batch_size):
                 scr_display = src[idx]
                 tgt_display = tgt[idx]
@@ -752,8 +753,8 @@ class PRNet(nn.Module):
         t_ab_mse = np.mean((translations_ab-translations_ab_pred)**2)
         t_ab_rmse = np.sqrt(t_ab_mse)
         t_ab_mae = np.mean(np.abs(translations_ab-translations_ab_pred))
-        # r_ab_r2_score = r2_score(eulers_ab, eulers_ab_pred)
-        # t_ab_r2_score = r2_score(translations_ab, translations_ab_pred)
+        r_ab_r2_score = r2_score(eulers_ab, eulers_ab_pred)
+        t_ab_r2_score = r2_score(translations_ab, translations_ab_pred)
         info = {'arrow': 'A->B',
                 'epoch': epoch,
                 'stage': 'train',
@@ -767,9 +768,8 @@ class PRNet(nn.Module):
                 't_ab_mse': t_ab_mse,
                 't_ab_rmse': t_ab_rmse,
                 't_ab_mae': t_ab_mae,
-                'r_ab_r2_score': 1,
-                't_ab_r2_score': 1
-                }
+                'r_ab_r2_score': r_ab_r2_score,
+                't_ab_r2_score': t_ab_r2_score}
         self.logger.write(info)
         return info
 
@@ -823,8 +823,8 @@ class PRNet(nn.Module):
         t_ab_mse = np.mean((translations_ab - translations_ab_pred) ** 2)
         t_ab_rmse = np.sqrt(t_ab_mse)
         t_ab_mae = np.mean(np.abs(translations_ab - translations_ab_pred))
-        # r_ab_r2_score = r2_score(eulers_ab, eulers_ab_pred)
-        # t_ab_r2_score = r2_score(translations_ab, translations_ab_pred)
+        r_ab_r2_score = r2_score(eulers_ab, eulers_ab_pred)
+        t_ab_r2_score = r2_score(translations_ab, translations_ab_pred)
 
         info = {'arrow': 'A->B',
                 'epoch': epoch,
@@ -839,8 +839,8 @@ class PRNet(nn.Module):
                 't_ab_mse': t_ab_mse,
                 't_ab_rmse': t_ab_rmse,
                 't_ab_mae': t_ab_mae,
-                'r_ab_r2_score': 1,
-                't_ab_r2_score': 1}
+                'r_ab_r2_score': r_ab_r2_score,
+                't_ab_r2_score': t_ab_r2_score}
         self.logger.write(info)
         return info
 
