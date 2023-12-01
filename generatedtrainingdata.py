@@ -3,7 +3,6 @@ from torch.utils.data import Dataset
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import h5py
-from scipy.spatial.transform import Rotation as R
 import random
 from corruptedpointcloud import CorruptedPointCloud
 
@@ -99,15 +98,15 @@ class GeneratedTrainingData(Dataset):
 
         # Adjust severity for noise
         severity = 1
-        opt = random.choice(['background_noise','gaussian_noise','uniform_noise', 'jitter_pointcloud', 'None']) # 
+        opt = random.choice(['gaussian_noise','uniform_noise', 'jitter_pointcloud']) # 
         if opt == 'gaussian_noise':
             template = CorruptedPointCloud(template).gaussian_noise(severity)
         # elif opt == 'background_noise':
         #     template = CorruptedPointCloud(template).background_noise(severity)
         elif opt == 'uniform_noise':
             template = CorruptedPointCloud(template).uniform_noise(severity)
-        elif opt == 'jitter_pointcloud':
-            template = CorruptedPointCloud(template).jitter_pointcloud(severity)
+        # elif opt == 'jitter_pointcloud':
+        #     template = CorruptedPointCloud(template).jitter_pointcloud(severity)
         
 
         ##### ENSURE EQUAL NUMBER OF POITNS #####
