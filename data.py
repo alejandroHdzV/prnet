@@ -10,7 +10,10 @@ from scipy.spatial.transform import Rotation
 from torch.utils.data import Dataset
 from sklearn.neighbors import NearestNeighbors
 from scipy.spatial.distance import minkowski
+import random
+import torch
 
+from corruptedpointcloud import CorruptedPointCloud
 
 def download():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +26,6 @@ def download():
         os.system('wget %s --no-check-certificate; unzip %s' % (www, zipfile))
         os.system('mv %s %s' % (zipfile[:-4], DATA_DIR))
         os.system('rm %s' % (zipfile))
-
 
 def load_data(partition):
     download()
@@ -42,7 +44,6 @@ def load_data(partition):
     all_label = np.concatenate(all_label, axis=0)
     return all_data, all_label # [:10,:]
 
-
 def translate_pointcloud(pointcloud):
     xyz1 = np.random.uniform(low=2. / 3., high=3. / 2., size=[3])
     xyz2 = np.random.uniform(low=-0.2, high=0.2, size=[3])
@@ -50,12 +51,10 @@ def translate_pointcloud(pointcloud):
     translated_pointcloud = np.add(np.multiply(pointcloud, xyz1), xyz2).astype('float32')
     return translated_pointcloud
 
-
 def jitter_pointcloud(pointcloud, sigma=0.01, clip=0.05):
     N, C = pointcloud.shape
     pointcloud += np.clip(sigma * np.random.randn(N, C), -1 * clip, clip)
     return pointcloud
-
 
 def farthest_subsample_points(pointcloud1, pointcloud2, num_subsampled_points=768):
     pointcloud1 = pointcloud1.T
@@ -70,7 +69,6 @@ def farthest_subsample_points(pointcloud1, pointcloud2, num_subsampled_points=76
     random_p2 = random_p1 #np.random.random(size=(1, 3)) + np.array([[500, 500, 500]]) * np.random.choice([1, -1, 2, -2])
     idx2 = nbrs2.kneighbors(random_p2, return_distance=False).reshape((num_subsampled_points,))
     return pointcloud1[idx1, :].T, pointcloud2[idx2, :].T
-
 
 class ModelNet40(Dataset):
     def __init__(self, num_points, num_subsampled_points=768, partition='train',
@@ -104,9 +102,11 @@ class ModelNet40(Dataset):
         pointcloud = self.data[item][:self.num_points]
         if self.partition != 'train':
             np.random.seed(item)
-        anglex = np.random.uniform() * np.pi / 4
-        angley = np.random.uniform() * np.pi / 4
-        anglez = np.random.uniform() * np.pi / 0.8
+
+        anglex = random.uniform(-np.pi / self.rot_factor, np.pi / self.rot_factor)
+        angley = random.uniform(-np.pi / self.rot_factor, np.pi / self.rot_factor)
+        anglez = random.uniform(-np.pi / self.rot_factor, np.pi / self.rot_factor)
+        
         cosx = np.cos(anglex)
         cosy = np.cos(angley)
         cosz = np.cos(anglez)
@@ -140,16 +140,27 @@ class ModelNet40(Dataset):
         pointcloud2 = np.random.permutation(pointcloud2.T).T
 
         if self.gaussian_noise:
-            pointcloud1 = jitter_pointcloud(pointcloud1)
-            pointcloud2 = jitter_pointcloud(pointcloud2)
+            # pointcloud1 = jitter_pointcloud(pointcloud1)
+            # pointcloud2 = jitter_pointcloud(pointcloud2)
+            # Adjust severity for noise
+            severity = 1
+            opt = random.choice(['gaussian_noise','uniform_noise']) # 
+            if opt == 'gaussian_noise':
+                pointcloud2 = CorruptedPointCloud(pointcloud2).gaussian_noise(severity)
+            elif opt == 'uniform_noise':
+                pointcloud2 = CorruptedPointCloud(pointcloud2).uniform_noise(severity)
 
         if self.subsampled:
             pointcloud1, pointcloud2 = farthest_subsample_points(pointcloud1, pointcloud2,
                                                                  num_subsampled_points=self.num_subsampled_points)
-
-        return pointcloud1.astype('float32'), pointcloud2.astype('float32'), R_ab.astype('float32'), \
-               translation_ab.astype('float32'), R_ba.astype('float32'), translation_ba.astype('float32'), \
-               euler_ab.astype('float32'), euler_ba.astype('float32')
+        
+        return torch.from_numpy(pointcloud1), torch.from_numpy(pointcloud2), torch.from_numpy(R_ab), \
+               torch.from_numpy(translation_ab), torch.from_numpy(R_ba), torch.from_numpy(translation_ba), \
+               torch.from_numpy(euler_ab), torch.from_numpy(euler_ba)
+               
+     #   return pointcloud1.astype('float32'), pointcloud2.astype('float32'), R_ab.astype('float32'), \
+      #         translation_ab.astype('float32'), R_ba.astype('float32'), translation_ba.astype('float32'), \
+       #        euler_ab.astype('float32'), euler_ba.astype('float32')
 
     def __len__(self):
         return self.data.shape[0]

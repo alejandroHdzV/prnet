@@ -111,13 +111,16 @@ class CorruptedPointCloud():
         '''
         pointcloud = self.pc
         N, C = pointcloud.shape
-        c = [(2,30), (3,30), (5,30), (7,30), (10,30)][severity-1]
+        c = [(2,20), (3,30), (5,30), (7,30), (10,35)][severity-1]
         for _ in range(c[0]):
+            # It selects a random point index of the point cloud in 'picked'
             i = np.random.choice(pointcloud.shape[0],1)
             picked = pointcloud[i]
+            # Computes Euclidean distances between each point and the picked point
             dist = np.sum((pointcloud - picked)**2, axis=1, keepdims=True)
             idx = np.argpartition(dist, c[1], axis=0)[:c[1]]
             # pointcloud[idx.squeeze()] = 0
+            # It deletes selected points
             pointcloud = np.delete(pointcloud, idx.squeeze(), axis=0)
         # print(pointcloud.shape)
         return pointcloud
@@ -225,7 +228,7 @@ class CorruptedPointCloud():
 
         num_points = pointcloud1.shape[0]
         nbrs1 = NearestNeighbors(n_neighbors=num_subsampled_points, algorithm='auto',
-                                metric=lambda x, y: minkowski(x, y)).fit(pointcloud1[:, :3])
+                                 metric=lambda x, y: minkowski(x, y)).fit(pointcloud1[:, :3])
         random_p1 = np.random.random(size=(1, 3)) + np.array([[500, 500, 500]]) * np.random.choice([1, -1, 1, -1])
         idx1 = nbrs1.kneighbors(random_p1, return_distance=False).reshape((num_subsampled_points,))
         gt_mask = torch.zeros(num_points).scatter_(0, torch.tensor(idx1), 1)
@@ -246,7 +249,7 @@ class CorruptedPointCloud():
             return normal
 
         """GEOTRANSFORMER: Random crop a point cloud with a plane and keep num_samples points."""
-        keep_ratio = [0.95, 0.85, 0.75, 0.65, 0.60][severity-1]
+        keep_ratio = [0.95, 0.85, 0.75, 0.55, 0.45][severity-1]
         points = self.pc
         num_samples = int(np.floor(points.shape[0] * keep_ratio + 0.5))
         if p_normal is None:
